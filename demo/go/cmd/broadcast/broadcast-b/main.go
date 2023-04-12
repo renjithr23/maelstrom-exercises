@@ -15,7 +15,7 @@ type topologyMsg struct {
 func main() {
 	n := maelstrom.NewNode()
 	topology := make(map[string][]string)
-	var messages []int
+	messages := make(map[int]struct{})
 
 	n.Handle("broadcast", func(msg maelstrom.Message) error {
 		var body map[string]any
@@ -23,7 +23,15 @@ func main() {
 			return err
 		}
 
-		messages = append(messages, int(body["message"].(float64)))
+		index := int(body["message"].(float64))
+		_, ok := messages[index]
+		if ok {
+			return n.Reply(msg, map[string]any{
+				"type": "broadcast_ok",
+			})
+		}
+
+		messages[index] = struct{}{}
 		for key := range topology {
 			if n.ID() != key {
 				if err := n.Send(key, body); err != nil {
@@ -44,9 +52,14 @@ func main() {
 			return err
 		}
 
+		var message_list []int
+		for key := range messages {
+			message_list = append(message_list, key)
+		}
+
 		return n.Reply(msg, map[string]any{
 			"type":     "read_ok",
-			"messages": messages,
+			"messages": message_list,
 		})
 	})
 
